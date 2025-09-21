@@ -28,43 +28,64 @@ local routes = {}
 -- ============================================================
 -- ROUTE EXAMPLE (isi CFrame)
 -- ============================================================
-local CP0to1 = {
-    CFrame.new(0, 5, 0),
-    CFrame.new(20, 5, 0),
-    CFrame.new(40, 5, 0),
-}
-local CP1to2 = {
-    CFrame.new(40, 5, 0),
-    CFrame.new(60, 5, 20),
-    CFrame.new(80, 5, 40),
-}
-local CP2to3 = {
-    CFrame.new(80, 5, 40),
-    CFrame.new(100, 5, 60),
-    CFrame.new(120, 5, 80),
-}
-local CP3to4 = {
-    CFrame.new(120, 5, 80),
-    CFrame.new(140, 5, 100),
-    CFrame.new(160, 5, 120),
-}
-local CP4to5 = {
-    CFrame.new(160, 5, 120),
-    CFrame.new(180, 5, 140),
-    CFrame.new(200, 5, 160),
-}
+-- Tinggi default waktu record
+local DEFAULT_HEIGHT = 1.859999418258667
 
+-- Ambil tinggi avatar sekarang
+local function getCurrentHeight()
+    local char = player.Character or player.CharacterAdded:Wait()
+    local humanoid = char:WaitForChild("Humanoid")
+    return humanoid.HipHeight + (char:FindFirstChild("Head") and char.Head.Size.Y or 2)
+end
+
+-- Adjustment posisi sesuai tinggi avatar
+local function adjustRoute(frames)
+    local adjusted = {}
+    local currentHeight = getCurrentHeight()
+    local offsetY = (currentHeight - DEFAULT_HEIGHT) * 0.5 -- <<< dikali 0.9
+    for _,cf in ipairs(frames) do
+        local pos, rot = cf.Position, cf - cf.Position
+        local newPos = Vector3.new(pos.X, pos.Y + offsetY, pos.Z)
+        table.insert(adjusted, CFrame.new(newPos) * rot)
+    end
+    return adjusted
+end
+
+-- ============================================================
+-- ROUTE EXAMPLE (isi CFrame)
+-- ============================================================
+local function loadRoute(url)
+    local ok, result = pcall(function()
+        return loadstring(game:HttpGet(url))()
+    end)
+    if ok and type(result) == "table" then
+        -- auto adjust langsung disini
+        return adjustRoute(result)
+    else
+        warn("Gagal load route dari: "..url)
+        return {}
+    end
+end
+
+-- daftar link raw route (ubah ke link punyamu)
 routes = {
-    {"CP0 → CP1", CP0to1},
-    {"CP1 → CP2", CP1to2},
-    {"CP2 → CP3", CP2to3},
-    {"CP3 → CP4", CP3to4},
-    {"CP4 → CP5", CP4to5},
+    {"BASE → CP1", loadRoute("https://raw.githubusercontent.com/Bardenss/RAVIKA/refs/heads/main/01.lua")},
+    {"CP1 → CP2", loadRoute("https://raw.githubusercontent.com/Bardenss/RAVIKA/refs/heads/main/12.lua")},
+    {"CP2 → CP3", loadRoute("https://raw.githubusercontent.com/Bardenss/RAVIKA/refs/heads/main/23.lua")},
+    {"CP3 → CP4", loadRoute("https://raw.githubusercontent.com/Bardenss/RAVIKA/refs/heads/main/34.lua")},
+    {"CP4 → CP5", loadRoute("https://raw.githubusercontent.com/Bardenss/RAVIKA/refs/heads/main/45.lua")},
+    {"CP5 → CP6", loadRoute("https://raw.githubusercontent.com/Bardenss/RAVIKA/refs/heads/main/56.lua")},
+    {"CP6 → CP7", loadRoute("https://raw.githubusercontent.com/Bardenss/RAVIKA/refs/heads/main/67.lua")},
+    {"CP7 → SUMMIT", loadRoute("https://raw.githubusercontent.com/Bardenss/RAVIKA/refs/heads/main/78.lua")},
 }
 
 -- ============================================================
 -- Fungsi bantu & core logic
 -- ============================================================
+local VirtualUser = game:GetService("VirtualUser")
+local antiIdleActive = true -- langsung aktif
+local antiIdleConn
+
 local function respawnPlayer()
     player.Character:BreakJoints()
 end
@@ -126,67 +147,6 @@ local function logAndNotify(msg, val)
     notify(msg, tostring(val or ""), 3)
 end
 
--- fungsi route
-local function runRouteOnce()
-    if #routes == 0 then return end
-    if not hrp then refreshHRP() end
-    isRunning = true
-    local idx = getNearestRoute()
-    logAndNotify("Mulai dari cp : ", routes[idx][1])
-    local frames = routes[idx][2]
-    if #frames < 2 then isRunning = false return end
-    local startIdx = getNearestFrameIndex(frames)
-    for i = startIdx, #frames - 1 do
-        if not isRunning then break end
-        lerpCF(frames[i], frames[i+1])
-    end
-    isRunning = false
-end
-
-local function runAllRoutes()
-    if #routes == 0 then return end
-    if not hrp then refreshHRP() end
-    isRunning = true
-    local idx = getNearestRoute()
-    logAndNotify("Sesuaikan dari cp : ", routes[idx][1])
-    for r = idx, #routes do
-        if not isRunning then break end
-        local frames = routes[r][2]
-        if #frames < 2 then continue end
-        local startIdx = getNearestFrameIndex(frames)
-        for i = startIdx, #frames - 1 do
-            if not isRunning then break end
-            lerpCF(frames[i], frames[i+1])
-        end
-    end
-    isRunning = false
-end
-
-local function stopRoute()
-    if isRunning then
-        logAndNotify("Berhasil stop")
-    end
-    isRunning = false
-end
-
-local function runSpecificRoute(routeIdx)
-    if not routes[routeIdx] then return end
-    if not hrp then refreshHRP() end
-    isRunning = true
-    local frames = routes[routeIdx][2]
-    if #frames < 2 then 
-        isRunning = false 
-        return 
-    end
-    logAndNotify("Memulai track : ", routes[routeIdx][1])
-    local startIdx = getNearestFrameIndex(frames)
-    for i = startIdx, #frames - 1 do
-        if not isRunning then break end
-        lerpCF(frames[i], frames[i+1])
-    end
-    isRunning = false
-end
-
 -- === VAR BYPASS ===
 local bypassActive = false
 local bypassConn
@@ -215,6 +175,132 @@ end
 
 player.CharacterAdded:Connect(setupBypass)
 if player.Character then setupBypass(player.Character) end
+
+-- helper otomatis bypass
+local function setBypass(state)
+    bypassActive = state
+    notify("Bypass Animasi", state and "✅ Aktif" or "❌ Nonaktif", 2)
+end
+
+-- Jalankan 1 route dari checkpoint terdekat
+local function runRouteOnce()
+    if #routes == 0 then return end
+    if not hrp then refreshHRP() end
+
+    setBypass(true) -- otomatis ON
+    isRunning = true
+
+    local idx = getNearestRoute()
+    logAndNotify("Mulai dari cp : ", routes[idx][1])
+    local frames = routes[idx][2]
+    if #frames < 2 then 
+        isRunning = false
+        setBypass(false)
+        return 
+    end
+
+    local startIdx = getNearestFrameIndex(frames)
+    for i = startIdx, #frames - 1 do
+        if not isRunning then break end
+        lerpCF(frames[i], frames[i+1])
+    end
+
+    isRunning = false
+    setBypass(false) -- otomatis OFF
+end
+
+local function runAllRoutes()
+    if #routes == 0 then return end
+    if not hrp then refreshHRP() end
+    isRunning = true
+    setBypass(true)
+    local idx = getNearestRoute()
+    logAndNotify("Sesuaikan dari cp : ", routes[idx][1])
+    for r = idx, #routes do
+        if not isRunning then break end
+        local frames = routes[r][2]
+        if #frames < 2 then continue end
+        local startIdx = getNearestFrameIndex(frames)
+        for i = startIdx, #frames - 1 do
+            if not isRunning then break end
+            lerpCF(frames[i], frames[i+1])
+        end
+    end
+    setBypass(false)
+    isRunning = false
+
+    -- loop otomatis, hanya kalau masih running
+    if isRunning then
+        respawnPlayer()
+        task.wait(3)
+        runAllRoutes()
+    end
+end
+
+local function stopRoute()
+    if isRunning then
+        logAndNotify("Stop route", "Semua route dihentikan!")
+    end
+
+    -- hentikan loop utama
+    isRunning = false
+
+    -- matikan bypass kalau aktif
+    if bypassActive then
+        bypassActive = false
+        notify("Bypass Animasi", "❌ Nonaktif", 2)
+    end
+end
+
+local function runSpecificRoute(routeIdx)
+    if not routes[routeIdx] then return end
+    if not hrp then refreshHRP() end
+    isRunning = true
+    local frames = routes[routeIdx][2]
+    if #frames < 2 then 
+        isRunning = false 
+        return 
+    end
+    logAndNotify("Memulai track : ", routes[routeIdx][1])
+    local startIdx = getNearestFrameIndex(frames)
+    for i = startIdx, #frames - 1 do
+        if not isRunning then break end
+        lerpCF(frames[i], frames[i+1])
+    end
+    isRunning = false
+end
+
+-- ===============================
+-- Anti Beton Ultra-Smooth
+-- ===============================
+local antiBetonActive = false
+local antiBetonConn
+
+local function enableAntiBeton()
+    if antiBetonConn then antiBetonConn:Disconnect() end
+
+    antiBetonConn = RunService.Stepped:Connect(function(_, dt)
+        local char = player.Character
+        if not char then return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local humanoid = char:FindFirstChild("Humanoid")
+        if not hrp or not humanoid then return end
+
+        if antiBetonActive and humanoid.FloorMaterial == Enum.Material.Air then
+            local targetY = -50
+            local currentY = hrp.Velocity.Y
+            local newY = currentY + (targetY - currentY) * math.clamp(dt * 2.5, 0, 1)
+            hrp.Velocity = Vector3.new(hrp.Velocity.X, newY, hrp.Velocity.Z)
+        end
+    end)
+end
+
+local function disableAntiBeton()
+    if antiBetonConn then
+        antiBetonConn:Disconnect()
+        antiBetonConn = nil
+    end
+end
 
 -- ============================================================
 -- UI: WindUI
@@ -255,6 +341,21 @@ notify = function(title, content, duration)
         })
     end)
 end
+
+local function enableAntiIdle()
+    if antiIdleConn then antiIdleConn:Disconnect() end
+    local player = Players.LocalPlayer
+    antiIdleConn = player.Idled:Connect(function()
+        if antiIdleActive then
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+            notify("Anti Idle", "Klik otomatis dilakukan.", 2)
+        end
+    end)
+end
+
+-- Jalankan saat script load
+enableAntiIdle()
 
 -- Tabs
 local MainTab = Window:Tab({
@@ -299,18 +400,27 @@ MainTab:Dropdown({
 })
 
 MainTab:Toggle({
-    Title = "Bypass Animasi",
-    Icon = "lucide:person-standing",
-    Desc = "Nonaktifkan animasi karakter",
+    Title = "Anti Beton Ultra-Smooth",
+    Icon = "lucide:shield",
+    Desc = "Mencegah jatuh secara kaku saat melayang",
     Value = false,
-    Callback = function(val)
-        bypassActive = val
-        WindUI:Notify({
-            Title = "Bypass Animasi",
-            Content = val and "✅ Aktif" or "❌ Nonaktif",
-            Duration = 3,
-            Icon = "check-circle" -- optional icon dari Packs
-        })
+    Callback = function(state)
+        antiBetonActive = state
+        if state then
+            enableAntiBeton()
+            WindUI:Notify({
+                Title = "Anti Beton",
+                Content = "✅ Aktif (Ultra-Smooth)",
+                Duration = 2
+            })
+        else
+            disableAntiBeton()
+            WindUI:Notify({
+                Title = "Anti Beton",
+                Content = "❌ Nonaktif",
+                Duration = 2
+            })
+        end
     end
 })
 
@@ -345,6 +455,90 @@ for idx, data in ipairs(routes) do
 end
 
 -- Settings
+-- ============================================================
+-- Setup teleport options: BASE + CP1, CP2, dst
+-- ============================================================
+local teleportOptions = {"BASE"}
+for idx, _ in ipairs(routes) do
+    table.insert(teleportOptions, "CP "..idx)
+end
+
+-- Delay dropdown (1–10 detik)
+local delayValues = {}
+for i = 1, 10 do table.insert(delayValues, tostring(i).."s") end
+local teleportDelay = 3 -- default 3 detik
+
+SettingsTab:Dropdown({
+    Title = "Delay Teleport",
+    Icon = "lucide:timer",
+    Values = delayValues,
+    Value = "3s",
+    Callback = function(val)
+        local n = tonumber(val:match("(%d+)"))
+        if n then teleportDelay = n end
+    end
+})
+
+-- Dropdown teleport satu checkpoint
+SettingsTab:Dropdown({
+    Title = "Teleport ke Checkpoint",
+    Icon = "lucide:map-pin",
+    Values = teleportOptions,
+    SearchBarEnabled = true,
+    Value = teleportOptions[1], -- default BASE
+    Callback = function(selected)
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        local targetCF
+        if selected == "BASE" then
+            targetCF = routes[1][2][1] -- frame pertama route 1
+        else
+            local idx = tonumber(selected:match("%d+"))
+            if idx and routes[idx] then
+                local frames = routes[idx][2]
+                targetCF = frames[#frames] -- frame terakhir route idx
+            end
+        end
+
+        if targetCF then
+            hrp.CFrame = targetCF
+            notify("Teleport", "Berhasil ke "..selected, 2)
+        else
+            notify("Teleport", "Gagal teleport!", 2)
+        end
+    end
+})
+
+-- Loop teleport dari BASE → CP terakhir
+SettingsTab:Button({
+    Title = "Loop Teleport",
+    Icon = "lucide:refresh-ccw",
+    Desc = "Teleport dari BASE sampai CP terakhir sesuai route",
+    Callback = function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        task.spawn(function()
+            -- BASE dulu
+            hrp.CFrame = routes[1][2][1]
+            notify("Loop Teleport", "Teleport ke BASE", 2)
+            task.wait(teleportDelay)
+
+            -- Loop dari CP1 sampai CP terakhir
+            for idx, _ in ipairs(routes) do
+                local frames = routes[idx][2]
+                hrp.CFrame = frames[#frames] -- frame terakhir route
+                notify("Loop Teleport", "Teleport ke CP "..idx, 2)
+                task.wait(teleportDelay)
+            end
+
+            notify("Loop Teleport", "Selesai!", 3)
+        end)
+    end
+})
 SettingsTab:Slider({
     Title = "WalkSpeed",
     Icon = "lucide:zap",
